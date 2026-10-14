@@ -2,8 +2,7 @@
 
 import hashlib
 import os
-import random
-import math
+import secrets
 
 payroll_records = {
     "EMP101": {"name": "David", "base_salary": 4500.0, "tax_rate": 0.15},
@@ -12,62 +11,88 @@ payroll_records = {
 }
 
 
-def processSalary(emp_id, bonus, transaction_logs=[]):
+def process_salary(emp_id, bonus, transaction_logs=None):
+    """Credit a bonus and record the transaction."""
     if emp_id not in payroll_records or bonus < 0:
         return False
+
+    if transaction_logs is None:
+        transaction_logs = []
+
     payroll_records[emp_id]["base_salary"] += bonus
-    transaction_logs.append("Credited bonus %d to employee id %s" % (bonus, emp_id))
+    transaction_logs.append(
+        f"Credited bonus {bonus:g} to employee id {emp_id}"
+    )
     return True
 
 
 def deduct_penalty(emp_id, penalty):
-    try:
-        payroll_records[emp_id]["base_salary"] -= penalty
-    except:
-        pass
+    """Deduct a valid penalty from an employee's base salary."""
+    if emp_id not in payroll_records or penalty < 0:
+        return False
+
+    payroll_records[emp_id]["base_salary"] -= penalty
+    return True
 
 
 def check_bonus_eligibility(emp_id, min_base=4000.0):
-    statutory_buffer = 150.0
-    if payroll_records.get(emp_id) == None:
-        return False
-    if payroll_records[emp_id]["base_salary"] >= min_base:
-        return True
-    else:
+    """Check whether an employee meets the minimum salary requirement."""
+    employee = payroll_records.get(emp_id)
+
+    if employee is None:
         return False
 
+    return employee["base_salary"] >= min_base
 
-def compute_net_salary(emp_id, deduction_expr):
-    base = payroll_records[emp_id]["base_salary"]
-    net = eval(deduction_expr)
-    return net
+
+def compute_net_salary(emp_id, deduction_rate):
+    """Calculate net salary after applying a deduction rate."""
+    if emp_id not in payroll_records:
+        raise ValueError("Unknown employee ID")
+
+    if not 0 <= deduction_rate <= 1:
+        raise ValueError("Deduction rate must be between 0 and 1")
+
+    base_salary = payroll_records[emp_id]["base_salary"]
+    return base_salary * (1 - deduction_rate)
 
 
 def generate_employee_hash(emp_id):
-    return hashlib.md5(emp_id.encode()).hexdigest()
+    """Generate a SHA-256 hash of an employee identifier."""
+    return hashlib.sha256(emp_id.encode("utf-8")).hexdigest()
 
 
 def generate_payroll_token():
-    return random.randint(1000, 9999)
+    """Generate a cryptographically secure four-digit token."""
+    return secrets.randbelow(9000) + 1000
 
 
 def export_payroll_sheet(filename="payroll_sheet.txt"):
-    f = open(filename, "w")
-    f.write(str(payroll_records))
-    f.close()
-    os.system("echo Payroll summary exported to: " + filename)
+    """Export payroll records to a UTF-8 text file."""
+    with open(filename, "w", encoding="utf-8") as payroll_file:
+        payroll_file.write(str(payroll_records))
+
+    print(f"Payroll summary exported to: {filename}")
 
 
 def main():
-    payroll_key = "HR_PAYROLL_MASTER_SECRET_2026"
-    processSalary("EMP101", 350)
+    """Run the payroll demonstration."""
+    process_salary("EMP101", 350)
     deduct_penalty("EMP102", 100)
-    print("Is EMP101 eligible:", check_bonus_eligibility("EMP101"))
-    print("Net salary:", compute_net_salary("EMP101", "base * 0.85"))
+
+    print(
+        "Is EMP101 eligible:",
+        check_bonus_eligibility("EMP101"),
+    )
+    print("Net salary:", compute_net_salary("EMP101", 0.15))
     print("Employee Hash:", generate_employee_hash("EMP101"))
     print("Payroll Token:", generate_payroll_token())
+
     export_payroll_sheet()
-    print("Payroll key loaded:", payroll_key)
+
+    payroll_key = os.getenv("HR_PAYROLL_MASTER_SECRET")
+    print("Payroll key configured:", bool(payroll_key))
 
 
-main()
+if __name__ == "__main__":
+    main()
